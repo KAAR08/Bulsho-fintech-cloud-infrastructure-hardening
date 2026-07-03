@@ -11,4 +11,18 @@ Additionally, using Network Security Groups (NSGs), firewall rules should be con
 Below is the network design architecture:
 <img src="/screenshots/network_architecture.png" alt="Zonned Network Architecture">
 
+### Creating Virtual Network
+To establish an isolated, multi-layered defensive environment, i begin by provisioning a dedicated Virtual Network (VNET) within Microsoft Azure. This network serves as the foundational boundary for the segmented architecture.
+
+A new resource group named <i>rg-bulsho-fintech-prod</i> is created to logically group and manage all production assets for the startup.
+
+This VNET is deployed within Africa, specifically South Africa (My Azure plan showed South Africa as the nearest center) to ensure regional digital compliance and low latency for regional infrastructure, as most service users are in Nairobi and the startup plans to expand to other regions in the continent.
+<img src="/screenshots/VNET_config.png" alt="VNET Bascic Configuration">
+
+I configured the private ip address and range for the startup VNET. /24 subnet mask was intentionally selected based on the startup's current size and relatively small user base. The scope was limited to 256 addresses to prevent massive unallocated addresses from sitting idle.
+<img src="/screenshots/VNET_ip_config.png" alt="VNET Address Space Configuration">
+
+
+### Restricted Zone (Private Subnet) Configuration
+
 
