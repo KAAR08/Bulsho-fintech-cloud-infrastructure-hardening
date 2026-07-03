@@ -52,3 +52,29 @@ As shown below, the zones are now set.
 After confirming that there is no conflicting IP space and incorrect configurations, i deployed the VNET.
 <img src="/screenshots/vnet_deployment.png" alt="Vnet zones">
 
+
+## Virtual Machines Provisioning
+The API server and database should sit on servers. These servers are created as Virtual Machines.
+
+### API Server VM Provisioning
+I chose to go with Ubuntu Server 22.04 LTS - Gen 2 for the startup's API server because it ensures five years of predictable, enterprise-grade security patches and system stability. Gen 2 machine also offers critical cloud security features that protect the OS against rootkits and boot-level malware.
+<img src="/screenshots/api_server.png" alt="APi Server">
+<img src="/screenshots/api_server1.png" alt="APi Server">
+<img src="/screenshots/api_server2.png" alt="APi Server">
+
+
+I mapped the api-server directly to our frontline network fabric during the provisioning phase. I selected our vnet-bulsho-fintech virtual network and placed the instance within the public-facing snet-api-public subnet (172.16.0.64/26). To ensure external consumers can seamlessly interact with the application, I enabled a new public IP resource designated as api-server-ip. Additionally, I explicitly set the NIC network security group to None since the subnet is already bound to snet-public-nsg, ensuring a clean design that handles all firewall rules at the DMZ boundary.
+<img src="/screenshots/api_server3.png" alt="APi Server">
+<img src="/screenshots/api_server4.png" alt="APi Server">
+
+Once the deployment process wrapped up, I verified the live status and operational specifications of the compute resource. The api-server is now successfully running in Switzerland North (Zone 1) under the production resource group, rg-bulsho-fintech-prod. It has been provisioned with a Standard D2s v3 size featuring 2 vCPUs and 8 GiB of memory, and is actively listening on its assigned primary public IP address, giving the fintech API a solid and scalable environment to begin handling traffic.
+
+<img src="/screenshots/api_server5.png" alt="APi Server">
+<img src="/screenshots/api_server6.png" alt="APi Server">
+
+
+
+
+
+
+
