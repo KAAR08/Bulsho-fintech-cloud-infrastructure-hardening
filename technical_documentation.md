@@ -37,3 +37,18 @@ Additionally, i created a new Network Security Group (NSG) named snet-private-ns
 
 
 
+### DMZ-Cloud Zone (Public Subnet) Configuration
+This subnet acts as our Cloud-DMZ, housing the public interactive endpoints while keeping them separate from the database infrastructure.
+Azure automatically segments the network space linearly. Since our database subnet (snet-db-private) claimed the first block from 172.16.0.0 to 172.16.0.63, this subnet begins precisely at the next available contiguous address, ensuring no overlapping spaces.
+The subnet has 64 addresses for ample scaling out of API servers due to anticipated user growth.
+<img src="/screenshots/public_subnet_config.png" alt="Public Subnet Basic Config">
+
+I left "Enable private subnet (no default outbound access)" unchecked to allow the workloads and VMs in this subnet to have internet connectivity. This is crucial for the Ubuntu Server as it needs to perform outbound tasks such as resolving external API dependencies and communicating with external fintech payment gateways. I also enforced a separate NSG for this subnet to ensure complete separation of duties.
+<img src="/screenshots/public_subnet_config1.png" alt="Public Subnet Sec Config">
+
+As shown below, the zones are now set.
+<img src="/screenshots/vnet_subnets.png" alt="Vnet zones">
+
+After confirming that there is no conflicting IP space and incorrect configurations, i deployed the VNET.
+<img src="/screenshots/vnet_deployment.png" alt="Vnet zones">
+
