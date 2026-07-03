@@ -24,5 +24,16 @@ I configured the private ip address and range for the startup VNET. /24 subnet m
 
 
 ### Restricted Zone (Private Subnet) Configuration
+The first subnet created is dedicated strictly to the database layer's isolated subnet, referred as Restricted Zone/Private Subnet in the architecture.The subnet is allocated a /26 subnet mask, establishing an IP address range of 172.16.0.0 - 172.16.0.63, this provides 64 discrete IP addresses, which yields ample address space for database without consuming the entire parent network.
+<img src="/screenshots/private_subnet_config1.png" alt="Private Subnet Address Space">
+
+I checked the "Enable private subnet" checkbox to cut off default outbound internet access for any machines in this subnet. It protects the database VM from unauthorized data exfiltration attempts and prevents downloading files directly from the web.
+
+As visually stated in the architecture, machines in this subnet are meant to be entirely isolated. Therefore, to glue this, "NAT gateway" is set to None.
+
+Additionally, i created a new Network Security Group (NSG) named snet-private-nsg to provide stateful firewall mechanism needed to enforce zoning rules. This allows writing of explicit rule that drops all incoming traffic except for legitimate PostgreSQL traffic (on port 5432) and SSH (on port 22) originating specifically from our API server's DMZ subnet.
+
+<img src="/screenshots/private_subnet_sec_config.png" alt="Private Subnet Sec Config">
+
 
 
