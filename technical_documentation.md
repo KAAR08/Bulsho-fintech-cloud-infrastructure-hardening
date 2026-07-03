@@ -74,6 +74,31 @@ Once the deployment process wrapped up, I verified the live status and operation
 
 
 
+### Database Server VM Provisioning
+Bulsho fintech’s app is powered by PostgreSQL database. Bulsho fintech’s priority is achieving granular control over the environment and remaining highly cost-sensitive. With this in mind, the most appropriate choice is to provision Ubuntu VM and install database services (in later phase).
+
+I provisioned a similar virtual machine as the API server and placed it in the private subnet.
+<img src="/screenshots/db_server.png" alt="DB Server">
+
+
+
+## Network Hardening
+Now, it is time to harden each subnet by creating rules on the Network Security Groups (NSGs) to explicitly define which categories of packets to allow and which to deny.
+
+## Hardening the Public Subnet (Cloud-DMZ)
+This is where the API server sits. The host runs our public-facing APIs along with a pgAdmin web interface for database interaction and management. Additionally, to facilitate secure file transfers and remote management, SSH is enabled. With this in mind, I created three inbound security rules on the public subnet NSG:
+
+- Allow SSH traffic from the administrator's specific IP address to the API server on port 22.
+- Allow inbound HTTPS packets on port 443 from any source IP address to accommodate general public user traffic.
+- Allow HTTP packets from the administrator's IP address to port 80 for restricted web-based management access.
+<img src="/screenshots/nsg_rules_public_subnet.png" alt="Public Subnet NSG Rules">
+
+
+### Validating the NSG rules and testing connections
+
+
+
+
 
 
 
