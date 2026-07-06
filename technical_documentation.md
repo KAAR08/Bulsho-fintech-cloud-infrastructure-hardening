@@ -96,6 +96,7 @@ This is where the API server sits. The host runs our public-facing APIs along wi
 
 ### Validating the NSG rules and testing connections
 - Rule 110: Connecting the server from admin’s computer using SSH
+
 To verify that my Network Security Group rules are functioning correctly, I initiated an SSH connection from my local management machine. By executing the command <i>ssh -i ./Downloads/api-server_key.pem <username>@<PUBLIC_IP></i>, I authenticated securely using the pre-configured private key file rather than a password.
 <img src="/screenshots/ssh_connection_successful.png" alt="NSG Rule Validation">
 
@@ -106,8 +107,9 @@ To confirm, that only ssh connections initiated from local management machine (a
 
 
 - Rule 120:  HTTPS traffic on port 443
+
 This was accessible from any device with internet connection as the NSG allows traffic indiscriminate of IP address.
-<img src="/screenshots/failed_port_80.png" alt="Successful Traffic on Port 443">
+<img src="/screenshots/successful_443.png" alt="Successful Traffic on Port 443">
 
 
 - Rule 130: HTTP connection from admin’s machine (local management machine) to api server.
