@@ -95,6 +95,7 @@ This is where the API server sits. The host runs our public-facing APIs along wi
   <img src="/screenshots/nsg_rules_public_subnet.png" alt="Public Subnet NSG Rules">
 
 ### Validating the NSG rules and testing connections
+
 - Rule 110: Connecting the server from admin’s computer using SSH
 
 To verify that my Network Security Group rules are functioning correctly, I initiated an SSH connection from my local management machine. By executing the command <i>ssh -i ./Downloads/api-server_key.pem <username>@<PUBLIC_IP></i>, I authenticated securely using the pre-configured private key file rather than a password.
@@ -105,12 +106,10 @@ As shown above, the connection succeeded perfectly. The Ubuntu banner confirms a
 To confirm, that only ssh connections initiated from local management machine (admin machine) goes through the file, i tried to initiate from a different machine (just changed the IP by connecting to VPN) using the correct authentication keys. The connection failed with "connection reset by peer by server" message.
 <img src="/screenshots/failed_ssh.png" alt="Failed SSH to server">
 
-
-- Rule 120:  HTTPS traffic on port 443
+- Rule 120: HTTPS traffic on port 443
 
 This was accessible from any device with internet connection as the NSG allows traffic indiscriminate of IP address.
 <img src="/screenshots/successful_443.png" alt="Successful Traffic on Port 443">
-
 
 - Rule 130: HTTP connection from admin’s machine (local management machine) to api server.
 
@@ -126,12 +125,11 @@ I checked if port 80 is accessible from another machine, the site was unreachabl
 
 The unauthorized IP request was successfully blocked by Network Security Group (NSG), hence failed to hit the api server.
 
-
 ## Hardening the Private Subnet (Restricted Zone)
+
 This subnet is created to remain hidden and inaccessible from the public. The subnet houses the database server, which is a critical asset for Bulsho Fintech. The database can only be communicated with by the API server by virtue of retrieving information from and writing to the database. Albeit, it is deemed necessary for remote administration of this database. To manage the database, I decided to use the API server as a multi-hop tunnel. I could’ve used Azure Bastion, but to be mindful of Bulsho Fintech’s cost sensitivity, I opted to use the API server as the linkage between the admin’s machine and the database server. That said, the private subnet permits the following categories of packets from the API server’s private IP:
 
 - Communication on port 22 for SSH and remote server management.
 
 - Communication on port 5432 for database interaction by pgAdmin.
-<img src="/screenshots/private_subnet_nsg_rules.png" alt="Private Subnet NSG Rules">
-
+  <img src="/screenshots/private_subnet_nsg_rules.png" alt="Private Subnet NSG Rules">
