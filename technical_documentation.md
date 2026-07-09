@@ -85,7 +85,7 @@ I provisioned a similar virtual machine as the API server and placed it in the p
 
 Now, it is time to harden each subnet by creating rules on the Network Security Groups (NSGs) to explicitly define which categories of packets to allow and which to deny.
 
-## Hardening the Public Subnet (Cloud-DMZ)
+### Hardening the Public Subnet (Cloud-DMZ)
 
 This is where the API server sits. The host runs our public-facing APIs along with a pgAdmin web interface for database interaction and management. Additionally, to facilitate secure file transfers and remote management, SSH is enabled. With this in mind, I created three inbound security rules on the public subnet NSG:
 
@@ -94,7 +94,7 @@ This is where the API server sits. The host runs our public-facing APIs along wi
 - Allow HTTP packets from the administrator's IP address to port 80 for restricted web-based management access.
   <img src="/screenshots/nsg_rules_public_subnet.png" alt="Public Subnet NSG Rules">
 
-### Validating the NSG rules and testing connections
+#### Testing the NSG rules and connections
 
 - Rule 110: Connecting the server from admin’s computer using SSH
 
@@ -125,7 +125,7 @@ I checked if port 80 is accessible from another machine, the site was unreachabl
 
 The unauthorized IP request was successfully blocked by Network Security Group (NSG), hence failed to hit the api server.
 
-## Hardening the Private Subnet (Restricted Zone)
+### Hardening the Private Subnet (Restricted Zone)
 
 This subnet is created to remain hidden and inaccessible from the public. The subnet houses the database server, which is a critical asset for Bulsho Fintech. The database can only be communicated with by the API server by virtue of retrieving information from and writing to the database. Albeit, it is deemed necessary for remote administration of this database. To manage the database, I decided to use the API server as a multi-hop tunnel. I could’ve used Azure Bastion, but to be mindful of Bulsho Fintech’s cost sensitivity, I opted to use the API server as the linkage between the admin’s machine and the database server. That said, the private subnet permits the following categories of packets from the API server’s private IP:
 
@@ -133,3 +133,44 @@ This subnet is created to remain hidden and inaccessible from the public. The su
 
 - Communication on port 5432 for database interaction by pgAdmin.
   <img src="/screenshots/private_subnet_nsg_rules.png" alt="Private Subnet NSG Rules">
+
+#### Testing the NSG rules
+- Rule 110: remote-ssh-connection-from-api-server
+
+The API server successfully connected with the Database server through SSH.
+<img src="/screenshots/ssh_from_apiserver_to_db.png" alt="Private Subnet NSG Rules">
+
+I also tried to initiate ssh connection from my local machine, but it failed because the rule only accepts ssh requests from api server internal IP address.
+<img src="/screenshots/ssh_from_apiserver_to_db.png" alt="Private Subnet NSG Rules testing">
+
+The question is how would it be possible to manage database server if Administrators can't access from their local machine?
+
+The administration can be done by using the local management machine as a proxy to perform Multi-hop SSH connection.
+
+Isn't it unsecure to have the database server SSH authentication key in the api server?
+
+Yes, it is unsecure. To mitigate this, a concept called SSH Agent Forwarding is employed. 
+Instead of copying sensitive private keys to intermediate cloud storage, SSH Agent Forwarding allows the local machine to act as a secure identity proxy. When initialized, a background process called ssh-agent runs locally in the management machine system memory, safely holding private cryptographic keys. When a multi-hop connection through the API gateway is established, to reach the isolated database server, the API server never reads a key file from its own disk. Instead, the database server's authentication challenge is tunneled straight back to the local machine's memory over the existing, encrypted SSH channel. The local machine signs the challenge and passes the cryptographic proof back through the bridge. The actual private key never leaves local file system, ensuring that a compromise of the public web server yields zero lateral access keys to an attacker.
+<img src="/screenshots/multihop_connection.png" alt="Multihop Connection">
+
+I also tried to ssh into the server from my local machine without multihop connection but with valid authentication key. The NSG dropped request and "connection timed out" was displayed on the terminal.
+
+<img src="/screenshots/failed_ssh_to_db.png" alt="Failed SSH connection">
+
+- Rule: 120 API server communication with PostgreSQL service on port 5432
+
+For now, there is no PostgreSQL service running on port 5432 of the database server. To test that port is reachable from the api server, I initiated a simple python http server on port 5432.
+
+I then used simple curl command and the server returned status code of 200 OK signalling success.
+
+<img src="/screenshots/port5432test.png" alt="Port 5432 connection success">
+
+A similar curl command from my local machine hangs and returns nothing.
+<img src="/screenshots/port5432testfail.png" alt="Port 5432 connection failed">
+
+
+
+## System Hardening
+In defense-in-depth, Network Security Groups (NSGs) cannot be the only walls to rely on. Endpoints should be made robust enough for attacks, should network-level firewalls fail and get bypassed.
+
+### API Server Hardening
