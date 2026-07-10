@@ -135,6 +135,7 @@ This subnet is created to remain hidden and inaccessible from the public. The su
   <img src="/screenshots/private_subnet_nsg_rules.png" alt="Private Subnet NSG Rules">
 
 #### Testing the NSG rules
+
 - Rule 110: remote-ssh-connection-from-api-server
 
 The API server successfully connected with the Database server through SSH.
@@ -149,7 +150,7 @@ The administration can be done by using the local management machine as a proxy 
 
 Isn't it unsecure to have the database server SSH authentication key in the api server?
 
-Yes, it is unsecure. To mitigate this, a concept called SSH Agent Forwarding is employed. 
+Yes, it is unsecure. To mitigate this, a concept called SSH Agent Forwarding is employed.
 Instead of copying sensitive private keys to intermediate cloud storage, SSH Agent Forwarding allows the local machine to act as a secure identity proxy. When initialized, a background process called ssh-agent runs locally in the management machine system memory, safely holding private cryptographic keys. When a multi-hop connection through the API gateway is established, to reach the isolated database server, the API server never reads a key file from its own disk. Instead, the database server's authentication challenge is tunneled straight back to the local machine's memory over the existing, encrypted SSH channel. The local machine signs the challenge and passes the cryptographic proof back through the bridge. The actual private key never leaves local file system, ensuring that a compromise of the public web server yields zero lateral access keys to an attacker.
 <img src="/screenshots/multihop_connection.png" alt="Multihop Connection">
 
@@ -168,9 +169,47 @@ I then used simple curl command and the server returned status code of 200 OK si
 A similar curl command from my local machine hangs and returns nothing.
 <img src="/screenshots/port5432testfail.png" alt="Port 5432 connection failed">
 
-
-
 ## System Hardening
+
 In defense-in-depth, Network Security Groups (NSGs) cannot be the only walls to rely on. Endpoints should be made robust enough for attacks, should network-level firewalls fail and get bypassed.
 
 ### API Server Hardening
+
+- System Updates & Automatic Security Patches
+I updated the package repositories and upgraded existing packages to ensure the server is up-to-date and have the latest package versions.
+I also installed unattended-upgrades to automatically apply future security patches, and ensured it is actively running.
+<img src="/screenshots/automated_Sec_patches.png" alt="System Update and Automated Security Patches">
+
+- Disabling compiler access for non-root users and lockdown of shadow file
+This ensures regular users or compromised web scripts to never have access to development tools like gcc or make which prevents attackers from compiling local exploits or building malicious binaries on the server if they get inside. Additionally, I locked the shadow file to ensure only root user have access hashed passwords to stop unauthorized accounts from reading or copying the password hashes for offline brute-force cracking attacks.
+<img src="/screenshots/disabling_compiler_Access.png" alt="Disabling Compiler access and Shadow file lockdown">
+
+- Disabling SSH Root Login
+Although I configured the VM to use SSH public keys for authentication during deployment, allowing direct remote access to the root account is still a significant security risk. To mitigate this, I modified the SSH configuration file (/etc/ssh/sshd_config) to explicitly disable root login entirely by setting the directive to PermitRootLogin no. This ensures that anyone attempting to manage the server must first log in using a standard, unprivileged user account and manually escalate their privileges, adding an extra layer of defense against direct root brute-force attempts.
+<img src="/screenshots/ssh_hardening.png" alt="SSH Daemon Hardening">
+
+- Fail2Ban Installation and Configuration
+Since the API server is exposed to the public internet, malicious scripts will eventually find it and attempt to brute-force custom SSH port. Fail2Ban watches the log files and dynamically drops firewall blocks on abusive IPs.
+I installed fail2ban in the system and created a local configuration override. I opened the file to make threshold guidelines.
+<img src="/screenshots/fail2banconfig1.png" alt="Fail2ban installation and configuration">
+<img src="/screenshots/fail2banconfig2.png" alt="Fail2ban installation and configuration">
+
+
+- Host-based Uncomplicated Firewall (UFW)
+In defense-in-depth, NSG only watch traffic originated from outside the network. Without host-based firewalls, the server may be vulnerable to insider threats. Operating system firewalls like UFW treat all interfaces distinctly, ensuring that even internal or adjacent network traffic must explicitly match host-level rules before interacting with system processes.
+<img src="/screenshots/api_host_ufw.png" alt="Host-based firewall">
+
+### Database Server Hardening
+Because the database server houses our most critical data assets, it requires the exact same host-level security baseline as the API server to achieve true defense-in-depth. Even though this host is isolated inside a private subnet, I applied the same core OS hardening measures detailed in the API Server section above.
+
+Shared OS Security Baseline: I enabled unattended-upgrades for automated security patches, restricted compiler access (gcc/make) for non-root users, locked down the /etc/shadow file, and disabled remote root logins over SSH.
+
+However, because this server's role is strictly internal, I customized its host-level firewall rules to be even more restrictive:
+
+<i>Host-based Firewall (UFW) Customization:</i> I configured the database server’s UFW to explicitly drop all packets unless they originate directly from the API server’s private IP address. This ensures that even if another resource is somehow introduced to the internal network, only our specific API gateway can touch ports 22 and 5432.
+
+
+
+
+
+
