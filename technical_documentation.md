@@ -240,6 +240,7 @@ I Switched to the administrative postgres system account to access the PostgreSQ
 <img src="/screenshots/postgresql_user_db_config.png" alt="PostgreSQL USER and DB creation">
 
 By default, PostgreSQL has privileges that allows public access of database schema. To revoke this and grant application user access, i ran the commands:
+
 <img src="/screenshots/grant_revoke_access.png" alt="ACCESS Grant and Revocation">
 
 PostgreSQL, by default, listens to loopback address, and no other addresses. This blocks api server from communicating with the database. For seamless communincation, PostgreSQL is set to listen server's private ip address. To implement this, i modified the configuration file (postgresql.conf)
@@ -298,6 +299,7 @@ The server is new and doesn't have docker preinstalled. I installed docker, enab
 <img src="/screenshots/docker_installation.png" alt="Docker engine installation">
 
 After installing docker in the system,I created requirements.txt file that has all application dependencies. This file is referenced every time an instance is created.
+
 <img src="/screenshots/requirement_txt.png" alt="requirements.txt">
 
 Next, i created Dockerfile which contains set of instructions Docker executes sequentially to assemble the image. In the Dockerfile, a low privilege user is created to avoid containers getting root-level privilege
@@ -312,6 +314,7 @@ Next, spinned up a container with the name bulsho-api-service and mapped port 80
 To verify reachability of both authenticated and unauthenticated paths of app running in the container, i used Client URL (curl).
 
 Unauthenticated path: /api/v1/health
+
 <img src="/screenshots/unauthenticated_path_access.png" alt="Testing unauthenticated path access">
 
 Authenticated path: /api/v1/payments/charge
