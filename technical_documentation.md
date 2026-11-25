@@ -21,6 +21,7 @@ A new resource group named <i>rg-bulsho-fintech-prod</i> is created to logically
 
 This VNET is deployed within Africa, specifically South Africa (My Azure plan showed South Africa as the nearest center) to ensure regional digital compliance and low latency for regional infrastructure, as most service users are in Nairobi and the startup plans to expand to other regions in the continent.
 <img src="/screenshots/VNET_config.png" alt="VNET Bascic Configuration">
+Note: I couldn't provision VMs in South Africa because my subscription only allows Switzerland North, prompting change of VLAN location to Switzerland.
 
 I configured the private ip address and range for the startup VNET. /24 subnet mask was intentionally selected based on the startup's current size and relatively small user base. The scope was limited to 256 addresses to prevent massive unallocated addresses from sitting idle.
 <img src="/screenshots/VNET_ip_config.png" alt="VNET Address Space Configuration">
@@ -108,14 +109,14 @@ To confirm, that only ssh connections initiated from local management machine (a
 
 - Rule 120: HTTPS traffic on port 443
 
-This was accessible from any device with internet connection as the NSG allows traffic indiscriminate of IP address.
+This was accessible from any device with internet connection as the NSG allows traffic indiscriminate of IP address. Traffic aimed at port 80 is allowed but redirected by Nginx ( to be configured in later phase) that sits on the edge of the server.
 <img src="/screenshots/successful_443.png" alt="Successful Traffic on Port 443">
-
+<!-- 
 - Rule 130: HTTP connection from admin’s machine (local management machine) to api server.
 
-I tested the HTTP access rule by navigating by seeting up simple web page on the server and navigating to the server's public IP address from my local management browser. The connection went through successfully because the NSG is configured to allow traffic on port 80 from the admin machine. I will use this for pg4admin to manage database graphically.
+<!-- I tested the HTTP access rule by navigating by seeting up simple web page on the server and navigating to the server's public IP address from my local management browser. The connection went through successfully because the NSG is configured to allow traffic on port 80 from the admin machine. I will use this for pg4admin to manage database graphically.  
 
-<img src="/screenshots/traffic_from_admin_to+80.png" alt="Traffic from local management Machine to port 80 server">
+<img src="/screenshots/traffic_from_admin_to+80.png" alt="Traffic from local management Machine to port 80 server"> 
 
 The server log shows / route access by local management machine
 <img src="/screenshots/server_log.png" alt="Server log">
@@ -123,7 +124,8 @@ The server log shows / route access by local management machine
 I checked if port 80 is accessible from another machine, the site was unreachable.
 <img src="/screenshots/failed_port_80.png" alt="Failed Port 80 access">
 
-The unauthorized IP request was successfully blocked by Network Security Group (NSG), hence failed to hit the api server.
+The unauthorized IP request was successfully blocked by Network Security Group (NSG), hence failed to hit the api server. -->
+
 
 ### Hardening the Private Subnet (Restricted Zone)
 
@@ -142,7 +144,7 @@ The API server successfully connected with the Database server through SSH.
 <img src="/screenshots/ssh_from_apiserver_to_db.png" alt="Private Subnet NSG Rules">
 
 I also tried to initiate ssh connection from my local machine, but it failed because the rule only accepts ssh requests from api server internal IP address.
-<img src="/screenshots/ssh_from_apiserver_to_db.png" alt="Private Subnet NSG Rules testing">
+<img src="/screenshots/ssh_from_localm_to_db.png" alt="Private Subnet NSG Rules testing">
 
 The question is how would it be possible to manage database server if Administrators can't access from their local machine?
 
@@ -156,7 +158,7 @@ Instead of copying sensitive private keys to intermediate cloud storage, SSH Age
 
 I also tried to ssh into the server from my local machine without multihop connection but with valid authentication key. The NSG dropped request and "connection timed out" was displayed on the terminal.
 
-<img src="/screenshots/failed_ssh_to_db.png" alt="Failed SSH connection">
+<img src="/screenshots/ssh_from_localm_to_db.png" alt="Failed SSH connection">
 
 - Rule: 120 API server communication with PostgreSQL service on port 5432
 
@@ -208,9 +210,138 @@ However, because this server's role is strictly internal, I customized its host-
 
 <i>Host-based Firewall (UFW) Customization:</i> I configured the database server’s UFW to explicitly drop all packets unless they originate directly from the API server’s private IP address. This ensures that even if another resource is somehow introduced to the internal network, only our specific API gateway can touch ports 22 and 5432.
 
+## Application and Service Deployment, Hardening
 
-## Application and Service Deployment
 Now, with everything set, systems and networks well-hardened, it is time to deploy applications and services.
 
-### API deployment
+### PostgreSQL Service on the Database Server and PgAdmin deployment
 
+The application running on the api server solely depends on the database for authentication, retrieval of records, and update.
+
+#### Service Installation, Configuration, and App User, Database Creation
+
+The database server is new and had no pre-configured services, therefore, i had to install postgresql from scratch.
+
+At first, the installation didn't go through because the server is housed in a private subnet with no public ip address. This makes servers in the subnet incapable of updating packages and installing packages needed for different server services.
+<img src="/screenshots/postgresql_installation_fail.png" alt="PostgreSQL installation failed">
+
+To overcome this without compromising security, i attached NAT gateway. This ensures server stay private, and as well provides outbound access for security patches and OS updates while blocking unsolicited connections from the internet
+
+<img src="/screenshots/natgw_private_setup.png" alt="NAT Gateway enabling for private subnet">
+
+Upon attaching NAT Gateway to the private subnet, the installation succeeded.
+<img src="/screenshots/postgresql_installation_success.png" alt="PostgreSQL installation failed">
+
+<img src="/screenshots/postgresql_status.png" alt="PostgreSQL status active">
+
+Owing to Bulsho's cost-sensitivity, the startup might use the server to host databases for different applications. This is best approached by creating a database and user for every application.
+
+I Switched to the administrative postgres system account to access the PostgreSQL shell. In this shell, i created an isolated database, a dedicated least-privilege user, and grant scoped access.
+<img src="/screenshots/postgresql_user_db_config.png" alt="PostgreSQL USER and DB creation">
+
+By default, PostgreSQL has privileges that allows public access of database schema. To revoke this and grant application user access, i ran the commands:
+<img src="/screenshots/grant_revoke_access.png" alt="ACCESS Grant and Revocation">
+
+PostgreSQL, by default, listens to loopback address, and no other addresses. This blocks api server from communicating with the database. For seamless communincation, PostgreSQL is set to listen server's private ip address. To implement this, i modified the configuration file (postgresql.conf)
+
+<img src="/screenshots/listening_address.png" alt="Set Listening address to private IP">
+
+pg_hba.conf acts as PostgreSQL firewall. I modified this file to restrict access via Host-Based Authentication.
+
+<img src="/screenshots/postgresql_host_based_auth.png" alt="PostgreSQL Host Based Authentication">
+
+I then restarted postgresql service for the changes to take effect.
+
+<img src="/screenshots/postgresql_service_restart.png" alt="PostgreSQL Service Restart">
+
+It is time to verify if the database server grants database access to the application server. I installed postgresql_client, a utility used to communicate with PostgreSQL service.
+<img src="/screenshots/postgresql_setup_verification.png" alt="PostgreSQL Client Setup Verification">
+
+#### Database Schema Initialization
+
+The database app ran by the startup has two tables which are essential for app to serve platform users. For security purpose, the table names and fields can not be mentioned.
+
+I initialized the two tables and populated some dummy data for testing purpose.
+<img src="/screenshots/Database_schema_creation.png" alt="Database Schema and Table creation">
+
+#### pgAdmin deployment on the API Server
+
+I pulled pgAdmin4 image is pulled from Docker Hub and configured the login credentials and launched it. Additionally, i created volume for it to ensure persistence across pgAdmin containers.
+
+<img src="/screenshots/pgAdmin_container_pull.png" alt="PgAdmin Image from Docker Hub">
+
+I then SSH-tunneled to access the pgAdmin web interface
+
+<img src="/screenshots/ssh_tunnelling.png" alt="SSH Tunneling">
+
+The pgAdmin web interface is now accessible from the local machine loopback address
+<img src="/screenshots/pgAdmin_web_interface.png" alt="pgAdmin web interface">
+
+I configured connection to database server from the pgAdmin panel
+
+<img src="/screenshots/pgAdmin_connection_config.png" alt="Connection to Server">
+
+It shows databases with functionality to view tables, rows and edit them if need be.
+<img src="/screenshots/pgAdmin_server_connection.png" alt="Connection to Server">
+
+### Application deployment
+
+In an audit finding, the application is not containerized and uses system-wide dependencies. This introduces poor app development as change in form of upgrade or downgrade of any dependency, due to another app requiring newer version could cause the app to break. The solution to this is containerization. Containerization packages application code, runtime, system tools and dependencies into single, isolated execution unit. Another importance of this approach is ease of spinning up different instances of the app from an image (blueprint) when there is traffic spike. Additionally, owing to absence of app containerization, there is no appAmor in place.
+
+Another security loophole is: The business logic directly handles traffic with no edge guard. Uvicorn (Python) is not designed to receive requests and send responses, leaving applications susceptible to web attacks. The best industry practice recommends use of a proxy server such as Nginx. Nginx comes with advantages like rate limiting, compression, SSL/TLS Termination, load balancing, serving static assets and zero-downtime reloads.Nginx sits at the edge of the api server, between clients making requests and application runtime/business logic processing these requests to generate responses.
+
+Finally, the app allows public access of documentation paths: /docs and /redoc. This gives information to attackers to have complete image of the API.
+
+#### Application Containerization
+
+The server is new and doesn't have docker preinstalled. I installed docker, enabled it and created new group to ensure current user runs docker commands without writing sudo every time.
+<img src="/screenshots/docker_installation.png" alt="Docker engine installation">
+
+After installing docker in the system,I created requirements.txt file that has all application dependencies. This file is referenced every time an instance is created.
+<img src="/screenshots/requirement_txt.png" alt="requirements.txt">
+
+Next, i created Dockerfile which contains set of instructions Docker executes sequentially to assemble the image. In the Dockerfile, a low privilege user is created to avoid containers getting root-level privilege
+<img src="/screenshots/dockerfile.png" alt="Dockerfile">
+
+I then built the docker image, a template ths is used to create containers, whenever need arises.
+<img src="/screenshots/docker_image_creation.png" alt="Image creation">
+
+Next, spinned up a container with the name bulsho-api-service and mapped port 8000 of the container to the 8000 of localhost for it to be reachable from localhost loopback address. The container also restarts from reboot or system shutdown.
+<img src="/screenshots/container_creation.png" alt="Container creation">
+
+To verify reachability of both authenticated and unauthenticated paths of app running in the container, i used Client URL (curl).
+
+Unauthenticated path: /api/v1/health
+<img src="/screenshots/unauthenticated_path_access.png" alt="Testing unauthenticated path access">
+
+Authenticated path: /api/v1/payments/charge
+This path requires x-api-key header which comes hashed from PostgreSQL database upon user authentication.
+<img src="/screenshots/authenticated_path_access.png" alt="Testing authenticated path access">
+
+### Nginx Installation and Configuration
+
+I installed nginx on the server
+<img src="/screenshots/nginx_installation.png" alt="Nginx Installation">
+In modern financial infrastructure, sending raw payment payloads or merchant API keys over unencrypted HTTP is an immediate deal-breaker, as anyone on the same wire could sniff that data in plaintext. It is good to create cryptographic keypair which gives Nginx the security certificates it needs to establish a TLS handshake, encrypting the transport channel end-to-end before any sensitive financial payload leaves the client.
+<img src="/screenshots/self_signed_cert.png" alt="Self-signed certificate">
+
+With the certificate generated, i created a dedicated bulsho-site configuration file to keep application routing modular and isolated from distribution updates. This configuration binds to port 80 to force an automatic redirect to HTTPS, binds to port 443 to handle TLS termination, and transparently forwards valid requests down to the containerized FastAPI backend on loopback (127.0.0.1:8000).
+
+<img src="/screenshots/nginx_config_file.png" alt="Nginx Installation">
+<img src="/screenshots/nginx_reload.png" alt="Nginx Installation">
+
+Finally, i tested the API from my local machine to simulate a real merchant interacting with Bulsho's payment gateway over the public internet.
+
+<img src="/screenshots/nginx_config_file.png" alt="Nginx Installation">
+
+/health (unprotected path):
+<img src="/screenshots/not_protected_path.png" alt="Accessing non-protected path">
+
+Accessing protected path /api/v1/payments with valid api key.
+<img src="/screenshots/protected_path_valid_key.png" alt="Accessing protected path with valid key">
+
+Accessing protected path /api/v1/payments with invalid api key.
+<img src="/screenshots/protected_path_valid_key.png" alt="Accessing protected path with invalid key">
+
+## Conclusion
+The infrastructure for Bulsho fintech has been hardened from flat, single-server to segmented, hardened infrastructure.
